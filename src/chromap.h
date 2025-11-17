@@ -74,8 +74,8 @@ private:
     size_t range_;
 
     /* Uses an unordered set to have O(1) find queries*/
-    std::priority_queue<uint32_t> pq_; // max-heap
-    std::unordered_set<uint32_t> unique_slots_; // keep track of unique values
+    std::priority_queue<size_t> pq_; // max-heap
+    std::unordered_set<size_t> unique_slots_; // keep track of unique values
 };
 
 class Chromap {
@@ -96,6 +96,13 @@ class Chromap {
     barcode_whitelist_lookup_table_ = kh_init(k64_seq);
 
     ParseReadFormat(mapping_parameters.read_format);
+
+    if (qual_pow10_table_.empty()) {
+      qual_pow10_table_.resize(100);
+      for (int i = 0; i < 100; ++i) {
+        qual_pow10_table_[i] = pow(10.0, (-i) / 10.0);
+      }
+    }
   }
 
   ~Chromap() {
@@ -213,6 +220,7 @@ class Chromap {
   uint64_t num_barcode_in_whitelist_ = 0;
   uint64_t num_corrected_barcode_ = 0;
   uint32_t barcode_length_ = 0;
+  static std::vector<double> qual_pow10_table_;
 };
 
 template <typename MappingRecord>

@@ -138,4 +138,26 @@ void MinimizerGenerator::GenerateMinimizers(
   }
 }
 
+void MinimizerGenerator::GenerateMinimizers(
+    const SequenceBatch &sequence_batch, uint32_t sequence_index,
+    std::vector<Minimizer> &minimizers,
+    khash_t(k64_occ) *
+        minimizer_occ_ht) const {
+  minimizers.clear();
+  GenerateMinimizers(sequence_batch, sequence_index, minimizers);
+
+  for (uint32_t i = 0; i < minimizers.size(); ++i) {
+    int khash_return_code;
+    khiter_t khash_iterator =
+        kh_put(k64_occ, minimizer_occ_ht, minimizers[i].GetHash(),
+               &khash_return_code);
+    if (khash_return_code == 1) {  // An insertion took place.
+      kh_value(minimizer_occ_ht, khash_iterator) =
+          MinimizerOccurrence{1, 0, minimizers[i].GetHit()};
+    } else if (khash_return_code == 0) {  // The key exists.
+      kh_value(minimizer_occ_ht, khash_iterator).count += 1;
+    }
+  }
+}
+
 }  // namespace chromap

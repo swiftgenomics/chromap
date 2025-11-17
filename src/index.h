@@ -16,6 +16,18 @@
 
 namespace chromap {
 
+struct MinimizerOccurrence {
+  uint32_t count;
+  uint32_t offset;
+  uint64_t hit;
+};
+
+// A hash table to store minimizer occurrences for index construction.
+// The key is a minimizer hash value and the value contains the number of
+// occurrences and the offset in the temporary occurrence table. If the
+// minimizer is a singleton, the hit is directly saved.
+KHASH_MAP_INIT_INT64(k64_occ, MinimizerOccurrence)
+
 class Index {
  public:
   Index() = delete;
@@ -96,6 +108,7 @@ class Index {
   const std::string index_file_path_;
   khash_t(k64) *lookup_table_ = nullptr;
   std::vector<uint64_t> occurrence_table_;
+  std::vector<uint64_t> occurrence_table_for_construction_;
 };
 
 }  // namespace chromap
