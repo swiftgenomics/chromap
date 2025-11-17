@@ -1,1 +1,4 @@
 *.o
+objs/
+test_build/
+chromap
