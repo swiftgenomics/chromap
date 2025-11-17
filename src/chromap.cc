@@ -14,6 +14,8 @@
 
 namespace chromap {
 
+std::vector<double> Chromap::qual_pow10_table_;
+
 void Chromap::ConstructIndex() {
   // TODO(Haowen): Need a faster algorithm
   // Load all sequences in the reference into one batch
@@ -634,7 +636,7 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
           adjusted_qual = adjusted_qual > 40 ? 40 : adjusted_qual;
           adjusted_qual = adjusted_qual < 3 ? 3 : adjusted_qual;
           double score =
-              pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
+              qual_pow10_table_[adjusted_qual] * barcode_abundance;
           corrected_barcodes_with_quals.emplace_back(
               BarcodeWithQual{barcode_length - 1 - i,
                               Uint8ToChar(base_to_change1), 0, 0, score});
@@ -652,8 +654,7 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
             ti2_limit = 4;
           }
           for (uint32_t j = j_start; j < j_end; ++j) {
-            uint64_t barcode_key_to_change2 = mask << (2 * i);
-            barcode_key_to_change2 = mask << (2 * j);
+            uint64_t barcode_key_to_change2 = mask << (2 * j);
             barcode_key_to_change2 = ~barcode_key_to_change2;
             barcode_key_to_change2 &= corrected_barcode_key;
             uint64_t base_to_change2 =
@@ -684,9 +685,9 @@ bool Chromap::CorrectBarcodeAt(uint32_t barcode_index,
                     barcode_qual[barcode_length - 1 - i] - qual_offset;
                 adjusted_qual1 = adjusted_qual1 > 40 ? 40 : adjusted_qual1;
                 adjusted_qual1 = adjusted_qual1 < 3 ? 3 : adjusted_qual1;
-                adjusted_qual += adjusted_qual1;
-                double score =
-                    pow(10.0, ((-adjusted_qual) / 10.0)) * barcode_abundance;
+                double score = qual_pow10_table_[adjusted_qual] *
+                               qual_pow10_table_[adjusted_qual1] *
+                               barcode_abundance;
                 corrected_barcodes_with_quals.emplace_back(BarcodeWithQual{
                     barcode_length - 1 - i, Uint8ToChar(base_to_change1),
                     barcode_length - 1 - j, Uint8ToChar(base_to_change2),

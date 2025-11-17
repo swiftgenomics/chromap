@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "index.h"
 #include "minimizer.h"
 #include "sequence_batch.h"
 
@@ -26,6 +27,11 @@ class MinimizerGenerator {
   void GenerateMinimizers(const SequenceBatch &sequence_batch,
                           uint32_t sequence_index,
                           std::vector<Minimizer> &minimizers) const;
+
+  void GenerateMinimizers(const SequenceBatch &sequence_batch,
+                          uint32_t sequence_index,
+                          std::vector<Minimizer> &minimizers,
+                          khash_t(k64_occ) * minimizer_occ_ht) const;
 
  private:
   const int kmer_size_;

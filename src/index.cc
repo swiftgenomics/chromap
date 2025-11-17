@@ -12,71 +12,62 @@ namespace chromap {
 void Index::Construct(uint32_t num_sequences, const SequenceBatch &reference) {
   const double real_start_time = GetRealTime();
 
+  // Use a hash table to count minimizer occurrences.
+  khash_t(k64_occ) *minimizer_occ_ht = kh_init(k64_occ);
+  kh_resize(k64_occ, minimizer_occ_ht, reference.GetNumBases() / window_size_ * 2);
+
   std::vector<Minimizer> minimizers;
-  minimizers.reserve(reference.GetNumBases() / window_size_ * 2);
+  minimizers.reserve(1000000);
   std::cerr << "Collecting minimizers.\n";
   MinimizerGenerator minimizer_generator(kmer_size_, window_size_);
   for (uint32_t sequence_index = 0; sequence_index < num_sequences;
        ++sequence_index) {
-    minimizer_generator.GenerateMinimizers(reference, sequence_index,
-                                           minimizers);
+    minimizer_generator.GenerateMinimizers(
+        reference, sequence_index, minimizers, minimizer_occ_ht);
   }
-  std::cerr << "Collected " << minimizers.size() << " minimizers.\n";
-  std::cerr << "Sorting minimizers.\n";
-  std::stable_sort(minimizers.begin(), minimizers.end());
-  std::cerr << "Sorted all minimizers.\n";
-  const size_t num_minimizers = minimizers.size();
+  std::cerr << "Collected " << kh_size(minimizer_occ_ht) << " minimizers.\n";
+  const size_t num_minimizers = kh_size(minimizer_occ_ht);
   assert(num_minimizers > 0);
   // TODO: check this assert!
   // Here I make sure the # minimizers is less than the limit of signed int32,
   // so that I can use int to store position later.
   assert(num_minimizers <= static_cast<size_t>(INT_MAX));
 
-  occurrence_table_.reserve(num_minimizers);
-  uint64_t previous_lookup_hash =
-      GenerateHashInLookupTable(minimizers[0].GetHash());
-  uint32_t num_previous_minimizer_occurrences = 0;
+  // Construct lookup table and occurrence table.
   uint64_t num_nonsingletons = 0;
   uint32_t num_singletons = 0;
-  for (size_t mi = 0; mi <= num_minimizers; ++mi) {
-    const bool is_last_iteration = mi == num_minimizers;
-    const uint64_t current_lookup_hash =
-        is_last_iteration ? previous_lookup_hash + 1
-                          : GenerateHashInLookupTable(minimizers[mi].GetHash());
+  for (khiter_t khash_iterator = kh_begin(minimizer_occ_ht);
+       khash_iterator != kh_end(minimizer_occ_ht); ++khash_iterator) {
+    if (!kh_exist(minimizer_occ_ht, khash_iterator)) continue;
 
-    if (current_lookup_hash != previous_lookup_hash) {
-      int khash_return_code = 0;
-      khiter_t khash_iterator =
-          kh_put(k64, lookup_table_, previous_lookup_hash, &khash_return_code);
-      assert(khash_return_code != -1 && khash_return_code != 0);
+    const uint64_t key = kh_key(minimizer_occ_ht, khash_iterator);
+    const MinimizerOccurrence &value = kh_value(minimizer_occ_ht, khash_iterator);
 
-      if (num_previous_minimizer_occurrences == 1) {
-        // We set the lowest bit of the key value to 1 if the minimizer only
-        // occurs once. And the occurrence is directly saved in the lookup
-        // table.
-        kh_key(lookup_table_, khash_iterator) |= 1;
-        kh_value(lookup_table_, khash_iterator) = occurrence_table_.back();
-        occurrence_table_.pop_back();
-        ++num_singletons;
-      } else {
-        kh_value(lookup_table_, khash_iterator) =
-            GenerateEntryValueInLookupTable(num_nonsingletons,
-                                            num_previous_minimizer_occurrences);
-        num_nonsingletons += num_previous_minimizer_occurrences;
-      }
-      num_previous_minimizer_occurrences = 1;
+    int khash_return_code = 0;
+    khiter_t lookup_table_khash_iterator =
+        kh_put(k64, lookup_table_, GenerateHashInLookupTable(key), &khash_return_code);
+    assert(khash_return_code != -1 && khash_return_code != 0);
+
+    if (value.count == 1) {
+      // We set the lowest bit of the key value to 1 if the minimizer only
+      // occurs once. And the occurrence is directly saved in the lookup
+      // table.
+      kh_key(lookup_table_, lookup_table_khash_iterator) |= 1;
+      kh_value(lookup_table_, lookup_table_khash_iterator) = value.hit;
+      ++num_singletons;
     } else {
-      num_previous_minimizer_occurrences++;
+      for (uint32_t i = 0; i < value.count; ++i) {
+        occurrence_table_.push_back(occurrence_table_for_construction_[value.offset + i]);
+      }
+      kh_value(lookup_table_, lookup_table_khash_iterator) =
+          GenerateEntryValueInLookupTable(num_nonsingletons, value.count);
+      num_nonsingletons += value.count;
     }
-
-    if (is_last_iteration) {
-      break;
-    }
-
-    occurrence_table_.push_back(minimizers[mi].GetHit());
-    previous_lookup_hash = current_lookup_hash;
   }
-  assert(num_nonsingletons + num_singletons == num_minimizers);
+  kh_destroy(k64_occ, minimizer_occ_ht);
+  std::vector<uint64_t>().swap(occurrence_table_for_construction_);
+
+  // assert(num_nonsingletons + num_singletons == num_minimizers);
 
   std::cerr << "Kmer size: " << kmer_size_ << ", window size: " << window_size_
             << ".\n";
