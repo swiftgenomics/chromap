@@ -1,0 +1,5 @@
+*.o
+chromap
+ref.index
+test.bed
+test.bed.new
